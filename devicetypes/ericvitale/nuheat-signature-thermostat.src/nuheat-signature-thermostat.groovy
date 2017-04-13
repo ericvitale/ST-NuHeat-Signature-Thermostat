@@ -1,5 +1,5 @@
 /**
- *  LIFX Group of Groups
+ *  NuHeat Signature Thermostat
  *
  *  Copyright 2016 ericvitale@gmail.com
  *
