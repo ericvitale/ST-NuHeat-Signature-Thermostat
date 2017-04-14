@@ -19,9 +19,12 @@
  *
  **/
  
- public static String version() { return "v0.0.001.20170411" }
+ import groovy.time.TimeCategory
+ 
+ public static String version() { return "v0.0.001.20170413" }
     /*
-     * 04/11/2017 >>> v0.0.001.20170411 - Initial buld.
+     * 04/11/2017 >>> v0.0.001.20170413 - Added hold / resume functionality.
+     * 04/11/2017 >>> v0.0.001.20170411 - Initial build.
      */
 
 metadata {
@@ -38,6 +41,7 @@ metadata {
         command "currentMode"
         command "power"
         command "resume"
+        command "hold"
 	}
 
 	preferences() {
@@ -56,13 +60,13 @@ metadata {
 		valueTile("temperature", "device.temperature", width: 6, height: 4, canChangeIcon: true) {
 			state("temperature", label:'${currentValue}°', unit:"F",
 				backgroundColors:[
-					[value: 31, color: "#153591"],
-					[value: 44, color: "#1e9cbb"],
-					[value: 59, color: "#90d2a7"],
-					[value: 74, color: "#44b621"],
-					[value: 84, color: "#f1d801"],
-					[value: 95, color: "#d04e00"],
-					[value: 96, color: "#bc2323"]
+					[value: 60, color: "#153591"],
+					[value: 65, color: "#1e9cbb"],
+					[value: 70, color: "#90d2a7"],
+					[value: 75, color: "#44b621"],
+					[value: 80, color: "#f1d801"],
+					[value: 90, color: "#d04e00"],
+					[value: 95, color: "#bc2323"]
 				]
 			)
 		}
@@ -99,9 +103,13 @@ metadata {
         standardTile("resume", "device.resume", height: 2, width: 2, inactiveLabel: false, decoration: "flat") {
 			state "resume", label:'Resume', action:"resume", icon:"st.Office.office7"
 		}
+        
+        standardTile("hold", "device.hold", height: 2, width: 2, inactiveLabel: false, decoration: "flat") {
+			state "hold", label:'Hold', action:"hold", icon:"st.Office.office13"
+		}
 		
-        main (["temperature"])
-        details(["temperature", "heatSliderControl", "heatingSetpoint", "refresh", "resume", "currentMode", "power"])        
+        main (["temperature", "power"])
+        details(["temperature", "heatSliderControl", "heatingSetpoint", "hold", "resume", "currentMode", "power", "refresh"])        
 	}
 }
 
@@ -132,8 +140,8 @@ private determineLogLevel(data) {
 }
 
 def log(data, type) {
-    //data = "${logPrefix} -- ${device.label} -- ${data ?: ''}"
-    data = "NuHeatSig -- ${device.label} -- ${data ?: ''}"
+    data = "${logPrefix()} -- ${device.label} -- ${data ?: ''}"
+    //data = "NuHeatSig -- ${device.label} -- ${data ?: ''}"
         
     if (determineLogLevel(type) >= determineLogLevel(settings?.logging ?: "INFO")) {
         switch (type?.toUpperCase()) {
@@ -171,6 +179,8 @@ def updated() {
 }
 
 def initialize() {
+
+	log("DH Version = ${version()}.", "INFO")
 	log("Thermostat Name = ${tStatName}.", "INFO")
     log("Thermostat Serial Number = ${tStatSerialNumber}.", "INFO")
     log("Username = ${theUser}.", "INFO")
@@ -198,11 +208,11 @@ def initialize() {
 
 def sendConfig() {
 	
-	log("No configuration to send.", "INFO")
+	log("No configuration to send.", "DEBUG")
 }
 
 def parse(String description) {
-	log("Parse() description = ${description}.", "INFO")
+	log("Parse() description = ${description}.", "DEBUG")
 }
 
 def refresh() {
@@ -237,35 +247,46 @@ def setHeatingSetpointAndHold(degrees) {
 }
 
 def setHeatingSetpointAndHold(degrees, duration) {
-	log("Setting Heating Setpoint(..., ...).", "DEBUG")
-
-	if(duration == 0) {
-    	log("Setting HeatingSetpoint to ${degrees} indefinitely.", "INFO")
-    } else {
-    	log("Setting HeatingSetpoint to ${degrees} for ${duration} hours.", "INFO")
-    }
+	log("Setting HeatingSetpoint to ${degrees} for ${duration} hours.", "INFO")
     
-    def isHeating = "false"
+    /*def isHeating = "false"
     
     if(degrees > getTemp()) {
     	isHeating = "true"
-    }
+    }*/
+   
+    /* Calculate Hold Time */
+    def date = new Date()
     
- 
- 	def values = ["SetPointTemp": temperatureToSetpoint(degrees), "ScheduleMode": "3", "Heating": isHeating]
+    use( TimeCategory ) {
+        date = date + getDuration().hours
+    }
+   
+    date = date.format("yyyy-MM-dd'T'HH:mm:ssZ")
+     
+ 	def values = ["SetPointTemp": temperatureToSetpoint(degrees), "ScheduleMode": "2", "HoldSetPointDateTime": date]
     
     setThermostat(values)
     
-    sendEvent("name": "heatingSetpoint", "value": degrees)
+    def temperatureScale = getTemperatureScale()
+    
+    sendEvent("name": "heatingSetpoint", "value": degrees, "unit": temperatureScale)
  
     setSelectedTemperature(degrees)
     setDuration(duration)
-    
     scheduleGetStatus()
 }
 
 def setCoolingSetpoint(degrees) {
 	log("The method setCoolingSetpoint(...) is not supported by this device.", "ERROR")
+}
+
+def hold() {
+	log("Holding the current set temperature of ${getSelectedTemperature()} indefinitely.", "INFO")
+	def values = ["SetPointTemp": temperatureToSetpoint(getSelectedTemperature()), "ScheduleMode": "3"]
+    
+    setThermostat(values)
+    scheduleGetStatus()
 }
 
 def setThermostatMode() {
@@ -383,24 +404,31 @@ def getTemp() {
 }
 
 def temperatureToSetpoint(value) {
-    //Formula f(x) = ((x-33)*56)+33
+    /****
+    Formula f(x) = ((x-33)*56)+33
+    ****/
+    
+    log("temperatureToSetpoint(${value}) evoked.", "DEBUG")
+    
     def sp = ((value - 33) * 56) + 33
     
-    log("Setpoint for temperature ${value} is ${sp}.", "INFO")
+    log("Setpoint for temperature ${value} is ${sp}.", "DEBUG")
     
     return sp
 }
 
 def setpointToTemperature(value) {
-    //f(x) = ((x - 33) / 56) + 33
+    /*****
+   	Formula f(x) = ((x - 33) / 56) + 33
+    *****/
     
     def theTemp = ((value - 33) / 56) + 33
 	
-    log("Temperature for Setpoint ${value} is ${theTemp}.", "INFO")
+    log("Temperature for Setpoint ${value} is ${theTemp}.", "DEBUG")
     
     theTemp = Math.round(theTemp)
     
-    log("Rounded temperature for Setpoint ${value} is ${theTemp}.", "INFO")
+    log("Rounded temperature for Setpoint ${value} is ${theTemp}.", "DEBUG")
 	
     return theTemp
 }
@@ -480,14 +508,13 @@ def getStatus() {
             log("Temperature = ${resp.data['Temperature']}", "DEBUG")
             log("Heating = ${resp.data['Heating']}", "DEBUG")
             log("Setpoint = ${resp.data['SetPointTemp']}", "DEBUG")
-
-
-
+            
             def theTemp = setpointToTemperature(resp.data['Temperature'])
             def power = 0
             def setPoint = setpointToTemperature(resp.data['SetPointTemp'])
 
             setTemp(theTemp)
+            setSelectedTemperature(setPoint)
 
             if(resp.data['Heating']) {
                 setMode("Heat")
@@ -499,11 +526,13 @@ def getStatus() {
 
             log("Converted Temperature: ${theTemp}.", "DEBUG")
             log("Calculated power usage: ${power} watts.", "DEBUG")
+            
+            def temperatureScale = getTemperatureScale()
 
             sendEvent("name":"temperature", "value": theTemp)
             sendEvent("name":"currentMode", "value": getMode())
             sendEvent("name":"power", "value": power)
-            sendEvent("name":"heatingSetpoint", "value": setPoint)
+            sendEvent("name": "heatingSetpoint", "value": setPoint, "unit": temperatureScale)
             sendEvent("name":"thermostatMode", "value": getMode())
 
             }
@@ -556,9 +585,7 @@ def resume() {
 	log("Resuming the schedule.", "INFO")
     
     def values = ["ScheduleMode": "1"]
-    
     setThermostat(values)
-    
     scheduleGetStatus()
 }
 
@@ -599,15 +626,6 @@ def authenticateUser() {
     	userAuthenticated(false)
         log("User failed to authenticate.", "ERROR")
     }
-}
-
-def isLoggedIn() {
-	if(data.sessionID == null) {
-		log.debug "No data.auth"
-		return false
-	}
-
-	return true;
 }
 
 def isUserAuthenticated() {
