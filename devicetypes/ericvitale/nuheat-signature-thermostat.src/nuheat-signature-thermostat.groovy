@@ -30,9 +30,10 @@
  
  public static String version() { return "v0.0.001.20170415" }
     /*
-     * 04/15/2017 >>> v0.0.001.20170415 - Updated authentication logic and auto device refresh. It should be more reliable.
-     * 04/13/2017 >>> v0.0.001.20170413 - Added hold / resume functionality.
-     * 04/11/2017 >>> v0.0.001.20170411 - Initial build.
+     * 04/15/2017 >>> v0.0.001.20170415b - Added switch capability and support for on() / off() methods.
+     * 04/15/2017 >>> v0.0.001.20170415a - Updated authentication logic and auto device refresh. It should be more reliable.
+     * 04/13/2017 >>> v0.0.001.20170413a - Added hold / resume functionality.
+     * 04/11/2017 >>> v0.0.001.20170411a - Initial build.
      */
 
 metadata {
@@ -56,6 +57,7 @@ metadata {
     	input "tStatName", "text", title: "Name", required: true
         input "tStatSerialNumber", "text", title: "Thermostat Serial Number", required: true
         input "defaultHoldTime", "number", title: "Default Hold Time (hours)", required: true, defaultValue: 1
+        input "defaultOnTemperature", "number", title: "Default On Temperature", required: true, defaultValue: 88
         input "powerUsage", "number", title: "Power Usage (watts)", required: true, defaultValue: 1200
         input "autoRefresh1", "bool", title: "Auto Refresh (5 mins)", required: true, defaultValue: true
         input "theUser", "text", title: "Username", description: "Your Nuheat email", required: true
@@ -201,6 +203,7 @@ def initialize() {
     log("Logging Level = ${logging}.", "INFO")
     log("Power Usage KWH = ${powerUsage}.", "INFO")
     log("Default Hold Time = ${defaultHoldTime}.", "INFO")
+    log("Default On Temperature = ${defaultOnTemperature}.", "INFO")
     log("Auto Refresh = ${autoRefresh1}.", "INFO")
     
     log("Setting local variables...", "INFO")
@@ -209,14 +212,14 @@ def initialize() {
     setPassword(thePassword)
     setPowerUsage(powerUsage)
     setAutoRefresh(autoRefresh1)
+    setDefaultTemperature(defaultOnTemperature)
     
     log("Unscheduling jobs...", "INFO")
     unschedule()
     
     if(getAutoRefresh()) {
     	log("Scheduling auto refresh every 5 minutes.", "INFO")
-        //runEvery5Minutes(updateStatusWithAuthentication)
-        runEvery1Minute(updateStatusWithAuthentication)
+        runEvery5Minutes(updateStatusWithAuthentication)
     } else {
     	log("Auto refresh is disabled.", "INFO")
     }
@@ -274,12 +277,6 @@ def setHeatingSetpointAndHold(degrees) {
 def setHeatingSetpointAndHold(degrees, duration) {
 	log("Setting HeatingSetpoint to ${degrees} for ${duration} hours.", "INFO")
     
-    /*def isHeating = "false"
-    
-    if(degrees > getTemp()) {
-    	isHeating = "true"
-    }*/
-   
     /* Calculate Hold Time */
     def date = new Date()
     
@@ -323,7 +320,7 @@ def setThermostatMode(String value) {
 }
 
 def off() {
-	log("The method off() is not supported by this device.", "ERROR")
+	resume()
 }
 
 def cool() {
@@ -335,7 +332,15 @@ def heat() {
 }
 
 def on() {
-	log("The method on() is not supported by this device.", "ERROR")
+	setHeatingSetpoint(getDefaultTemperature())
+}
+
+def turnedOn() {
+	sendEvent("name": "switch", "value": "on")
+}
+
+def turnedOff() {
+	sendEvent("name": "switch", "value": "off")
 }
 
 //--------------------------------------------------------
@@ -426,6 +431,14 @@ def getTemp() {
     }
     
     return state.theTemp
+}
+
+def setDefaultTemperature(value) {
+	state.defaultTemperature = value
+}
+
+def getDefaultTemperature() {
+	return state.defaultTemperature
 }
 
 def temperatureToSetpoint(value) {
@@ -544,9 +557,11 @@ def getStatus() {
             if(resp.data['Heating']) {
                 setMode("Heat")
                 power = getPowerUsage()
+                turnedOn()
             } else {
                 setMode("Off")
                 power = 0
+                turnedOff()
             }
 
             log("Converted Temperature: ${theTemp}.", "DEBUG")
