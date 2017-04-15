@@ -28,8 +28,9 @@
  
  import groovy.time.TimeCategory
  
- public static String version() { return "v0.0.001.20170415" }
+ public static String version() { return "v0.0.001.20170415c" }
     /*
+     * 04/15/2017 >>> v0.0.001.20170415c - UI update.
      * 04/15/2017 >>> v0.0.001.20170415b - Added switch capability and support for on() / off() methods.
      * 04/15/2017 >>> v0.0.001.20170415a - Updated authentication logic and auto device refresh. It should be more reliable.
      * 04/13/2017 >>> v0.0.001.20170413a - Added hold / resume functionality.
@@ -51,6 +52,9 @@ metadata {
         command "power"
         command "resume"
         command "hold"
+        
+        attribute "lastActivity", "string"
+        attribute "summary", "string"
 	}
 
 	preferences() {
@@ -68,7 +72,7 @@ metadata {
     }
     
 	tiles(scale: 2) {
-		valueTile("temperature", "device.temperature", width: 6, height: 4, canChangeIcon: true) {
+		/*valueTile("temperature", "device.temperature", width: 6, height: 4, canChangeIcon: true) {
 			state("temperature", label:'${currentValue}°', unit:"F", icon: "st.Weather.weather2",
 				backgroundColors:[
 					[value: 60, color: "#153591"],
@@ -80,18 +84,40 @@ metadata {
 					//[value: 95, color: "#bc2323"]
 				]
 			)
-		}
+		}*/
+        
+        multiAttributeTile(name:"heading", type: "thermostat", width: 6, height: 4, canChangeIcon: true){
+            tileAttribute ("device.temperature", key: "PRIMARY_CONTROL") {
+                attributeState(label:'${currentValue}°', unit:"F", defaultState: true,
+                    backgroundColors:[
+                        [value: 60, color: "#153591"],
+                        [value: 70, color: "#44b621"],
+                        [value: 80, color: "#f1d801"],
+                        [value: 90, color: "#d04e00"]
+                    ]
+                )
+            }
+            
+            /*tileAttribute ("device.lastActivity", key: "SECONDARY_CONTROL") {
+				attributeState "default", label:'Last activity: ${currentValue}', action: "refresh.refresh"
+			}*/
+            
+            //tileAttribute("device.heatingSetpoint", key: "SECONDARY_CONTROL") {
+			tileAttribute("device.summary", key: "SECONDARY_CONTROL") {
+            	attributeState "heat", label:'${currentValue}°', unit:"F", backgroundColor:"#ffffff"
+			}
+        }
         
 		standardTile("mode", "device.thermostatMode", inactiveLabel: false, decoration: "flat") {
 			state "off", label:'${name}', action:"thermostat.setThermostatMode"
 			state "heat", label:'${name}', action:"thermostat.setThermostatMode"
 		}
 		
-		controlTile("heatSliderControl", "device.heatingSetpoint", "slider", height: 2, width: 4, inactiveLabel: false, range:"(62..100)") {
+		controlTile("heatSliderControl", "device.heatingSetpoint", "slider", height: 1, width: 6, inactiveLabel: false, range:"(62..100)") {
 			state "setHeatingSetpoint", action:"thermostat.setHeatingSetpoint", backgroundColor:"#e86d13"
 		}
 		
-        valueTile("heatingSetpoint", "device.heatingSetpoint", height: 2, width: 2, inactiveLabel: false, decoration: "flat") {
+        valueTile("heatingSetpoint", "device.heatingSetpoint", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
 			state "heat", label:'${currentValue}°', unit:"F", backgroundColor:"#ffffff"
 		}
         
@@ -118,9 +144,19 @@ metadata {
         standardTile("hold", "device.hold", height: 2, width: 2, inactiveLabel: false, decoration: "flat") {
 			state "hold", label:'Hold', action:"hold", icon:"st.Office.office13"
 		}
-		
-        main (["temperature", "power"])
-        details(["temperature", "heatSliderControl", "heatingSetpoint", "hold", "resume", "currentMode", "power", "refresh"])        
+        
+        valueTile("lastActivityTitle", "device.lastActivity", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
+			state "default", label:'Last Activity', backgroundColor:"#ffffff"
+		}
+        
+        valueTile("lastActivity", "device.lastActivity", height: 1, width: 4, inactiveLabel: false, decoration: "flat") {
+			state "default", label:'${currentValue}', backgroundColor:"#ffffff"
+		}
+        
+        //main (["temperature", "power"])
+        //details(["temperature", "heatSliderControl", "hold", "resume", "heatingSetpoint", "currentMode", "power", "refresh"])        
+        main (["heading", "power"])
+        details(["heading", "heatSliderControl", "hold", "resume", "refresh", "heatingSetpoint", "currentMode", "power", "lastActivityTitle", "lastActivity"])        
 	}
 }
 
@@ -293,6 +329,8 @@ def setHeatingSetpointAndHold(degrees, duration) {
     def temperatureScale = getTemperatureScale()
     
     sendEvent("name": "heatingSetpoint", "value": degrees, "unit": temperatureScale)
+    
+    updateSummary(degrees, "set")
  
     setSelectedTemperature(degrees)
     setDuration(duration)
@@ -337,10 +375,12 @@ def on() {
 
 def turnedOn() {
 	sendEvent("name": "switch", "value": "on")
+    sendEvent("name":"thermostatOperatingState", "value": "heating")
 }
 
 def turnedOff() {
 	sendEvent("name": "switch", "value": "off")
+    sendEvent("name":"thermostatOperatingState", "value": "idle")
 }
 
 //--------------------------------------------------------
@@ -533,60 +573,62 @@ def getStatus() {
     
         httpGet(params) {resp ->
 
-            log("Response: ${resp}.", "TRACE")
+                log("Response: ${resp}.", "TRACE")
 
-            resp.headers.each {
-               log("header ${it.name} : ${it.value}", "TRACE")
-            }
+                resp.headers.each {
+                   log("header ${it.name} : ${it.value}", "TRACE")
+                }
 
-            log("response contentType: ${resp.contentType}", "TRACE")
-            log("response data: ${resp.data}", "TRACE")
-            log("WPerSquareUnit = ${resp.data['WPerSquareUnit']}", "DEBUG")
-            log("FloorArea = ${resp.data['FloorArea']}", "DEBUG")
-            log("Temperature = ${resp.data['Temperature']}", "DEBUG")
-            log("Heating = ${resp.data['Heating']}", "DEBUG")
-            log("Setpoint = ${resp.data['SetPointTemp']}", "DEBUG")
+                log("response contentType: ${resp.contentType}", "TRACE")
+                log("response data: ${resp.data}", "TRACE")
+                log("WPerSquareUnit = ${resp.data['WPerSquareUnit']}", "DEBUG")
+                log("FloorArea = ${resp.data['FloorArea']}", "DEBUG")
+                log("Temperature = ${resp.data['Temperature']}", "DEBUG")
+                log("Heating = ${resp.data['Heating']}", "DEBUG")
+                log("Setpoint = ${resp.data['SetPointTemp']}", "DEBUG")
+
+                def theTemp = setpointToTemperature(resp.data['Temperature'])
+                def power = 0
+                def setPoint = setpointToTemperature(resp.data['SetPointTemp'])
+
+                setTemp(theTemp)
+                setSelectedTemperature(setPoint)
+
+                if(resp.data['Heating']) {
+                    setMode("Heat")
+                    power = getPowerUsage()
+                    turnedOn()
+                    updateSummary(setPoint, "heating")
+                } else {
+                    setMode("Off")
+                    power = 0
+                    turnedOff()
+                    updateSummary(setPoint, "idle")
+                }
+
+                log("Converted Temperature: ${theTemp}.", "DEBUG")
+                log("Calculated power usage: ${power} watts.", "DEBUG")
+
+                def temperatureScale = getTemperatureScale()
+
+                sendEvent("name":"temperature", "value": theTemp)
+                sendEvent("name":"currentMode", "value": getMode())
+                sendEvent("name":"power", "value": power)
+                sendEvent("name":"heatingSetpoint", "value": setPoint, "unit": temperatureScale)
+                sendEvent("name":"thermostatMode", "value": getMode())
+
+                updateDeviceLastActivity(new Date())
+			}
             
-            def theTemp = setpointToTemperature(resp.data['Temperature'])
-            def power = 0
-            def setPoint = setpointToTemperature(resp.data['SetPointTemp'])
+	} catch (groovyx.net.http.HttpResponseException e) {
 
-            setTemp(theTemp)
-            setSelectedTemperature(setPoint)
+    	log("User is not authenticated, authenticating.", "ERROR")
+        userAuthenticated(false)
 
-            if(resp.data['Heating']) {
-                setMode("Heat")
-                power = getPowerUsage()
-                turnedOn()
-            } else {
-                setMode("Off")
-                power = 0
-                turnedOff()
-            }
-
-            log("Converted Temperature: ${theTemp}.", "DEBUG")
-            log("Calculated power usage: ${power} watts.", "DEBUG")
-            
-            def temperatureScale = getTemperatureScale()
-
-            sendEvent("name":"temperature", "value": theTemp)
-            sendEvent("name":"currentMode", "value": getMode())
-            sendEvent("name":"power", "value": power)
-            sendEvent("name": "heatingSetpoint", "value": setPoint, "unit": temperatureScale)
-            sendEvent("name":"thermostatMode", "value": getMode())
-
-            }
-            
-		} catch (groovyx.net.http.HttpResponseException e) {
-
-            log("User is not authenticated, authenticating.", "ERROR")
-            userAuthenticated(false)
-
-            if(e.getMessage() == "Unauthorized") {
-                authenticateUser()
-        }
-             
-	}
+        if(e.getMessage() == "Unauthorized") {
+        	authenticateUser()
+    	}
+	}      
 }
 
 def setThermostat(value_map) {
@@ -628,6 +670,7 @@ def resume() {
     
     def values = ["ScheduleMode": "1"]
     setThermostat(values)
+    updateSummary(0, "resume")
     scheduleGetStatus()
 }
 
@@ -684,6 +727,20 @@ def userAuthenticated(value) {
 	state.authenticatedUser = value
 }
 
+def updateDeviceLastActivity(lastActivity) {
+	def finalString = lastActivity?.format('MM/d/yyyy hh:mm:ss a',location.timeZone)    
+	sendEvent(name: "lastActivity", value: finalString, display: false , displayed: false)
+}
 
+def updateSummary(temp, state) {
 
-//https://www.mynuheat.com/api/useraccount?sessionid=CWSa6qIJH0ig6Vl9ZvBY0A
+	if(state == "idle") {
+    	sendEvent(name: "summary", value: "Idle @ ${temp}")
+    } else if(state == "set") {
+    	sendEvent(name: "summary", value: "Set to ${temp}")
+    } else if(state == "resume") {
+    	sendEvent(name: "summary", value: "Resuming...")
+    } else {
+    	sendEvent(name: "summary", value: "Heating to ${temp}")
+    }
+}
