@@ -72,23 +72,9 @@ metadata {
     }
     
 	tiles(scale: 2) {
-		/*valueTile("temperature", "device.temperature", width: 6, height: 4, canChangeIcon: true) {
-			state("temperature", label:'${currentValue}°', unit:"F", icon: "st.Weather.weather2",
-				backgroundColors:[
-					[value: 60, color: "#153591"],
-					//[value: 65, color: "#1e9cbb"],
-					//[value: 70, color: "#90d2a7"],
-					[value: 70, color: "#44b621"],
-					[value: 80, color: "#f1d801"],
-					[value: 90, color: "#d04e00"]//,
-					//[value: 95, color: "#bc2323"]
-				]
-			)
-		}*/
-        
         multiAttributeTile(name:"heading", type: "thermostat", width: 6, height: 4, canChangeIcon: true){
             tileAttribute ("device.temperature", key: "PRIMARY_CONTROL") {
-                attributeState(label:'${currentValue}°', unit:"F", defaultState: true,
+                attributeState("on", label:'${currentValue}°', unit:"F", defaultState: true, icon: "st.Weather.weather2",
                     backgroundColors:[
                         [value: 60, color: "#153591"],
                         [value: 70, color: "#44b621"],
@@ -98,11 +84,6 @@ metadata {
                 )
             }
             
-            /*tileAttribute ("device.lastActivity", key: "SECONDARY_CONTROL") {
-				attributeState "default", label:'Last activity: ${currentValue}', action: "refresh.refresh"
-			}*/
-            
-            //tileAttribute("device.heatingSetpoint", key: "SECONDARY_CONTROL") {
 			tileAttribute("device.summary", key: "SECONDARY_CONTROL") {
             	attributeState "heat", label:'${currentValue}°', unit:"F", backgroundColor:"#ffffff"
 			}
@@ -118,7 +99,7 @@ metadata {
 		}
 		
         valueTile("heatingSetpoint", "device.heatingSetpoint", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
-			state "heat", label:'${currentValue}°', unit:"F", backgroundColor:"#ffffff"
+			state "heat", label:'Currently: ${currentValue}°', unit:"F", backgroundColor:"#ffffff"
 		}
         
         valueTile("currentMode", "device.currentMode", height: 1, width: 2, inactiveLabel: false, decoration: "flat") {
@@ -134,7 +115,7 @@ metadata {
 		}
         
         standardTile("setTemp", "device.setTemp", inactiveLabel: false, decoration: "flat") {
-			state "default", action:"setTemp", label:"Set"//, icon:"st.secondary.refresh"
+			state "default", action:"setTemp", label:"Set"
 		}
         
         standardTile("resume", "device.resume", height: 2, width: 2, inactiveLabel: false, decoration: "flat") {
