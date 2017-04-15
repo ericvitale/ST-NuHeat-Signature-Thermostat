@@ -14,16 +14,24 @@
  *  
  *  You can find the latest version of this device handler @ https://github.com/ericvitale/ST-NuHeat-Signature-Thermostat
  *  You can find my other device handlers & SmartApps @ https://github.com/ericvitale
+ *  You can find my SmartThings profile @ https://community.smartthings.com/users/whoismoses/summary
  *
  *  Note: You will need an account which can only be setup on a thermostat.
+ *
+ *  Thanks to @erobertshaw for providing initial api URLs and initial code.
+ *  https://community.smartthings.com/users/erobertshaw/summary
+ *
+ *  Manufacturer Website: http://www.mynuheat.com
+ *  Project Page: http://www.nuheat.com/products/thermostats/signature
  *
  **/
  
  import groovy.time.TimeCategory
  
- public static String version() { return "v0.0.001.20170413" }
+ public static String version() { return "v0.0.001.20170415" }
     /*
-     * 04/11/2017 >>> v0.0.001.20170413 - Added hold / resume functionality.
+     * 04/15/2017 >>> v0.0.001.20170415 - Updated authentication logic and auto device refresh. It should be more reliable.
+     * 04/13/2017 >>> v0.0.001.20170413 - Added hold / resume functionality.
      * 04/11/2017 >>> v0.0.001.20170411 - Initial build.
      */
 
@@ -49,24 +57,25 @@ metadata {
         input "tStatSerialNumber", "text", title: "Thermostat Serial Number", required: true
         input "defaultHoldTime", "number", title: "Default Hold Time (hours)", required: true, defaultValue: 1
         input "powerUsage", "number", title: "Power Usage (watts)", required: true, defaultValue: 1200
-        input "autoRefresh", "bool", title: "Auto Refresh (5 mins)", required: true, defaultValue: false
+        input "autoRefresh1", "bool", title: "Auto Refresh (5 mins)", required: true, defaultValue: true
         input "theUser", "text", title: "Username", description: "Your Nuheat email", required: true
 		input "thePassword", "text", title: "Password", description: "Your Nuheat password", required: true
+        input "showPassword", "bool", title: "Show Password in Log", required: true, defaultValue: false
     	input "logging", "enum", title: "Log Level", required: false, defaultValue: "INFO", options: ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
         
     }
     
 	tiles(scale: 2) {
 		valueTile("temperature", "device.temperature", width: 6, height: 4, canChangeIcon: true) {
-			state("temperature", label:'${currentValue}°', unit:"F",
+			state("temperature", label:'${currentValue}°', unit:"F", icon: "st.Weather.weather2",
 				backgroundColors:[
 					[value: 60, color: "#153591"],
-					[value: 65, color: "#1e9cbb"],
-					[value: 70, color: "#90d2a7"],
-					[value: 75, color: "#44b621"],
+					//[value: 65, color: "#1e9cbb"],
+					//[value: 70, color: "#90d2a7"],
+					[value: 70, color: "#44b621"],
 					[value: 80, color: "#f1d801"],
-					[value: 90, color: "#d04e00"],
-					[value: 95, color: "#bc2323"]
+					[value: 90, color: "#d04e00"]//,
+					//[value: 95, color: "#bc2323"]
 				]
 			)
 		}
@@ -180,35 +189,51 @@ def updated() {
 
 def initialize() {
 
+	log("Initializing device handler for NuHeat Signiture Thermostat", "INFO")
 	log("DH Version = ${version()}.", "INFO")
 	log("Thermostat Name = ${tStatName}.", "INFO")
     log("Thermostat Serial Number = ${tStatSerialNumber}.", "INFO")
     log("Username = ${theUser}.", "INFO")
-    log("Uncomment the line of code following this statement if  you really want to print your password.", "INFO")
-    //log("Password = ${thePassword} minutes.", "INFO")
+    log("Show pasword in log? = ${showPassword}.", "INFO")
+    if(showPassword) {
+        log("Password = ${thePassword} minutes.", "INFO")
+	}
     log("Logging Level = ${logging}.", "INFO")
     log("Power Usage KWH = ${powerUsage}.", "INFO")
     log("Default Hold Time = ${defaultHoldTime}.", "INFO")
-    log("Auto Refresh = ${autoRefresh}.", "INFO")
+    log("Auto Refresh = ${autoRefresh1}.", "INFO")
     
+    log("Setting local variables...", "INFO")
     setSerialNumber(tStatSerialNumber)
     setUsername(theUser)
     setPassword(thePassword)
     setPowerUsage(powerUsage)
-    setAutoRefresh(autoRefresh)
+    setAutoRefresh(autoRefresh1)
     
+    log("Unscheduling jobs...", "INFO")
     unschedule()
     
     if(getAutoRefresh()) {
-    	runEvery5Minutes(getStatus)
+    	log("Scheduling auto refresh every 5 minutes.", "INFO")
+        //runEvery5Minutes(updateStatusWithAuthentication)
+        runEvery1Minute(updateStatusWithAuthentication)
+    } else {
+    	log("Auto refresh is disabled.", "INFO")
     }
-    
-    runIn(5, sendConfig)
 }
 
-def sendConfig() {
-	
-	log("No configuration to send.", "DEBUG")
+def updateStatusWithAuthentication() {
+	if(!isUserAuthenticated()) {
+    	if(authenticateUser()) {
+        	getStatus()
+        }
+    } else {
+	    getStatus()
+    }
+}
+
+def updateStatus() {
+	getStatus()
 }
 
 def parse(String description) {
@@ -540,6 +565,7 @@ def getStatus() {
 		} catch (groovyx.net.http.HttpResponseException e) {
 
             log("User is not authenticated, authenticating.", "ERROR")
+            userAuthenticated(false)
 
             if(e.getMessage() == "Unauthorized") {
                 authenticateUser()
@@ -573,6 +599,7 @@ def setThermostat(value_map) {
     } catch (groovyx.net.http.HttpResponseException e) {
 
         log("User is not authenticated, authenticating.", "ERROR")
+        userAuthenticated(false)
         
         if(e.getMessage() == "Unauthorized") {
         	authenticateUser()
@@ -622,9 +649,11 @@ def authenticateUser() {
     if(getSessionID() != "") {
 	    userAuthenticated(true)
         log("User has been authenticated.", "INFO")
+        return true
     } else {
     	userAuthenticated(false)
         log("User failed to authenticate.", "ERROR")
+        return false
     }
 }
 
@@ -639,3 +668,7 @@ def isUserAuthenticated() {
 def userAuthenticated(value) {
 	state.authenticatedUser = value
 }
+
+
+
+//https://www.mynuheat.com/api/useraccount?sessionid=CWSa6qIJH0ig6Vl9ZvBY0A
