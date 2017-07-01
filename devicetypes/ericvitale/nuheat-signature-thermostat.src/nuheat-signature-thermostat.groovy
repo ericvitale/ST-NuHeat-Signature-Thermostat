@@ -134,8 +134,6 @@ metadata {
 			state "default", label:'${currentValue}', backgroundColor:"#ffffff"
 		}
         
-        //main (["temperature", "power"])
-        //details(["temperature", "heatSliderControl", "hold", "resume", "heatingSetpoint", "currentMode", "power", "refresh"])        
         main (["heading", "power"])
         details(["heading", "heatSliderControl", "hold", "resume", "refresh", "heatingSetpoint", "currentMode", "power", "lastActivityTitle", "lastActivity"])        
 	}
@@ -169,7 +167,6 @@ private determineLogLevel(data) {
 
 def log(data, type) {
     data = "${logPrefix()} -- ${device.label} -- ${data ?: ''}"
-    //data = "NuHeatSig -- ${device.label} -- ${data ?: ''}"
         
     if (determineLogLevel(type) >= determineLogLevel(settings?.logging ?: "INFO")) {
         switch (type?.toUpperCase()) {
@@ -195,15 +192,13 @@ def log(data, type) {
 }
 
 def installed() {
-	log("Begin installed().", "INFO")
+	log("Initializing...", "INFO")
 	initialize()
-    log("End installed().", "INFO")
 }
 
 def updated() {
-	log("Begin updated().", "INFO")
+	log("Updating...", "INFO")
 	initialize()
-    log("End updated().", "INFO")
 }
 
 def initialize() {
@@ -347,11 +342,14 @@ def cool() {
 }
 
 def heat() {
-	log("The method heat() is not supported by this device.", "ERROR")
+	log("Heating...", "INFO")
+    on()
 }
 
 def on() {
-	setHeatingSetpoint(getDefaultTemperature())
+	log("Turing on...", "INFO")
+    setHeatingSetpoint(getDefaultTemperature())
+    turnedOn()
 }
 
 def turnedOn() {
@@ -464,7 +462,7 @@ def getDefaultTemperature() {
 
 def temperatureToSetpoint(value) {
     /****
-    Formula f(x) = ((x-33)*56)+33
+    Formula f(x) = ((x - 33) * 56) + 33
     ****/
     
     log("temperatureToSetpoint(${value}) evoked.", "DEBUG")
@@ -631,8 +629,6 @@ def setThermostat(value_map) {
 
             log("response contentType: ${resp.contentType}", "TRACE")
             log("response data: ${resp.data}", "TRACE")
-
-
         }
     } catch (groovyx.net.http.HttpResponseException e) {
 
@@ -640,7 +636,9 @@ def setThermostat(value_map) {
         userAuthenticated(false)
         
         if(e.getMessage() == "Unauthorized") {
-        	authenticateUser()
+        	if(authenticateUser()) {
+            	setThermostat(value_map)
+            }
         }
     }
     
@@ -672,15 +670,15 @@ def authenticateUser() {
     
     httpPost(params) {resp ->
     
-    	log("Response: ${resp}.", "DEBUG")
+    	log("Response: ${resp}.", "TRACE")
         
         resp.headers.each {
-           log("header ${it.name} : ${it.value}", "DEBUG")
+           log("header ${it.name} : ${it.value}", "TRACE")
         }
         
-        log("response contentType: ${resp.contentType}", "DEBUG")
-        log("response data: ${resp.data}", "DEBUG")
-        log("SessionID: ${resp.data["SessionId"]}", "DEBUG")
+        log("response contentType: ${resp.contentType}", "TRACE")
+        log("response data: ${resp.data}", "TRACE")
+        log("SessionID: ${resp.data["SessionId"]}", "TRACE")
         
         setSessionID(resp.data["SessionId"])
 	}
