@@ -59,15 +59,15 @@ metadata {
 
 	preferences() {
     	input "tStatName", "text", title: "Name", required: true
-        input "tStatSerialNumber", "text", title: "Thermostat Serial Number", required: true
-        input "defaultHoldTime", "number", title: "Default Hold Time (hours)", required: true, defaultValue: 1
-        input "defaultOnTemperature", "number", title: "Default On Temperature", required: true, defaultValue: 88
-        input "powerUsage", "number", title: "Power Usage (watts)", required: true, defaultValue: 1200
-        input "autoRefresh1", "bool", title: "Auto Refresh (5 mins)", required: true, defaultValue: true
-        input "theUser", "text", title: "Username", description: "Your Nuheat email", required: true
-		input "thePassword", "text", title: "Password", description: "Your Nuheat password", required: true
-        input "showPassword", "bool", title: "Show Password in Log", required: true, defaultValue: false
-    	input "logging", "enum", title: "Log Level", required: false, defaultValue: "INFO", options: ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
+        input "tStatSerialNumber", "text", title: "Thermostat Serial Number"
+        input "defaultHoldTime", "number", title: "Default Hold Time (hours)", defaultValue: 1
+        input "defaultOnTemperature", "number", title: "Default On Temperature", defaultValue: 88
+        input "powerUsage", "number", title: "Power Usage (watts)", defaultValue: 1200
+        input "autoRefresh1", "bool", title: "Auto Refresh (5 mins)", defaultValue: true
+        input "theUser", "text", title: "Username", description: "Your Nuheat email"
+		input "thePassword", "text", title: "Password", description: "Your Nuheat password"
+        input "showPassword", "bool", title: "Show Password in Log", defaultValue: false
+    	input "logging", "enum", title: "Log Level", defaultValue: "INFO", options: ["TRACE", "DEBUG", "INFO", "WARN", "ERROR"]
         
     }
     
